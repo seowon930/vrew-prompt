@@ -132,8 +132,17 @@ h1, h2, h3 { text-wrap: balance; margin: 0; }
 .msg.user { justify-content: flex-end; align-items: center; }
 .msg.user .bubble { background: var(--accent); color: var(--accent-ink); border-color: transparent; border-radius: 14px 4px 14px 14px; white-space: pre-line; }
 .msg.user .bubble.skip { background: var(--sunk); color: var(--muted); }
-.fix { background: none; border: 0; color: var(--muted); font-size: 13px; cursor: pointer; padding: 4px 6px; border-radius: 6px; flex: none; }
-.fix:hover { color: var(--accent); text-decoration: underline; }
+.fix { background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-size: 12px; cursor: pointer; padding: 3px 10px; border-radius: 999px; flex: none; }
+.fix:hover { color: var(--accent); border-color: var(--accent); }
+.ubtn { font: inherit; text-align: left; cursor: pointer; }
+.ubtn:hover { box-shadow: 0 0 0 2px var(--accent-soft); }
+.answers { display: flex; flex-wrap: wrap; gap: 6px; }
+.ans-h { font-size: 12px; font-weight: 600; color: var(--muted); }
+.ans { border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 8px; padding: 4px 9px; font-size: 12.5px; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ans span { color: var(--muted); margin-right: 5px; }
+.ans:hover { border-color: var(--accent); }
+.ans.on { border-color: var(--accent); background: var(--accent-soft); }
+.ans.empty { color: var(--muted); border-style: dashed; }
 .area { margin-left: 40px; background: var(--surface); border: 1.5px dashed var(--clip); border-radius: 14px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
 @media (max-width: 520px) { .area { margin-left: 0; } }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -559,6 +568,13 @@ const PAGES = {
   }
 };
 
+/* '내 답' 목록에 보일 짧은 이름 */
+const SHORT = {
+  char: { kind: '캐릭터', name: '이름', look: '생김새', outfit: '옷', prop: '소품', pose: '동작', face: '표정', bg: '배경', style: '그림체', color: '포인트 컬러', ratio: '비율' },
+  script: { ratio: '화면', kind: '영상 종류', topic: '주제', aud: '보는 사람', len: '길이', voice: '말하는 사람', tone: '말투', must: '꼭 넣을 내용', end: '마무리' },
+  scene: { who: '주인공', style: '그림체', mood: '색감' }
+};
+
 /* ---------- 상태 도우미 ---------- */
 let route = null, pending = null, resetArm = false, OUTCACHE = [];
 const getOpts = q => typeof q.options === 'function' ? q.options() : (q.options || []);
@@ -669,10 +685,10 @@ function updateChat(p) {
     const ans = st.a[q.id];
     const bot = `<div class="msg bot"><span class="ava" aria-hidden="true"></span><div class="bubble"><span class="qn">${i + 1} / ${Q.length}</span>${esc(q.ask)}${q.hint ? `<span class="hint">${esc(q.hint)}</span>` : ''}</div></div>`;
     if (i === st.cur) h += bot + area(p, q);
-    else if (ans !== undefined) h += bot + `<div class="msg user"><button class="fix" data-act="edit" data-i="${i}">고치기</button><div class="bubble${ans.skip ? ' skip' : ''}">${esc(labelOf(q, ans))}</div></div>`;
+    else if (ans !== undefined) h += bot + `<div class="msg user"><button class="fix" data-act="edit" data-i="${i}">바꾸기</button><button class="bubble ubtn${ans.skip ? ' skip' : ''}" data-act="edit" data-i="${i}" title="눌러서 이 답만 바꾸기">${esc(labelOf(q, ans))}</button></div>`;
   });
   if (st.cur >= Q.length) {
-    h += `<div class="msg bot done" id="area"><span class="ava" aria-hidden="true"></span><div class="bubble">다 됐어요! 프롬프트를 복사해서 AI에 붙여 넣으세요. 답을 바꾸고 싶으면 ‘고치기’를 누르면 돼요.</div></div>`;
+    h += `<div class="msg bot done" id="area"><span class="ava" aria-hidden="true"></span><div class="bubble">다 됐어요! 프롬프트를 복사해서 AI에 붙여 넣으세요. 바꾸고 싶은 답을 누르면 그 부분만 다시 고를 수 있어요.</div></div>`;
   }
   $('#chat').innerHTML = h;
 }
@@ -704,6 +720,7 @@ function area(p, q) {
   if (q.type === 'longtext') btns.push(`<button class="btn sm" data-act="sample">예시 대본 넣기</button>`, '<span class="spacer"></span>', `<button class="btn sm primary" data-act="custom">다음</button>`);
   if (q.type === 'multi') btns.push('<span class="spacer"></span>', `<button class="btn sm primary" data-act="multi">${pending.list.length ? `${pending.list.length}개 고르고 다음` : '다음'}</button>`);
   if (q.optional) btns.splice(q.type === 'multi' ? 1 : 0, 0, `<button class="btn sm" data-act="skip">건너뛰기</button>`);
+  if (cur !== undefined) btns.unshift(`<button class="btn sm" data-act="keep">그대로 두기</button>`);
   if (btns.length) h += `<div class="row">${btns.join('')}</div>`;
   return h + '</div>';
 }
@@ -719,6 +736,11 @@ function updateOut(p) {
   const missing = (OUTCACHE.join('').match(/⟦/g) || []).length;
   const mark = t => esc(t).replace(/⟦(.+?)⟧/g, '<mark class="ph">$1</mark>');
   let h = `<div class="out-h"><h2>완성된 프롬프트</h2>${missing ? `<span class="pill">빈칸 ${missing}개</span>` : '<span class="pill ok">완성</span>'}</div>`;
+  const Q = P.Q(), sh = SHORT[p] || {};
+  h += '<div class="ans-h">내 답 · 누르면 그 부분만 바꿀 수 있어요</div><div class="answers">' + Q.map((q, i) => {
+    const x = st.a[q.id];
+    return `<button class="ans${i === st.cur ? ' on' : ''}${x === undefined ? ' empty' : ''}" data-act="edit" data-i="${i}" title="${esc(q.ask)}"><span>${esc(sh[q.id] || q.ask)}</span>${esc(x === undefined ? '아직' : labelOf(q, x).split('\n')[0])}</button>`;
+  }).join('') + '</div>';
   h += '<div class="bar">';
   h += P.outs.length > 1 ? `<div class="seg" role="tablist">${P.outs.map(x => `<button role="tab" aria-selected="${x.id === tab}" class="${x.id === tab ? 'on' : ''}" data-act="tab" data-v="${x.id}">${x.label}</button>`).join('')}</div>` : '<span></span>';
   if (P.langs.length > 1) h += `<div class="seg" aria-label="언어">${P.langs.map(l => `<button class="${l === lang ? 'on' : ''}" aria-pressed="${l === lang}" data-act="lang" data-v="${l}">${l === 'ko' ? '한국어' : 'English'}</button>`).join('')}</div>`;
@@ -745,10 +767,10 @@ function answer(p, val) {
   save();
   updateChat(p); updateOut(p); focusArea();
 }
-function focusArea() {
+function focusArea(center) {
   const el = $('#area');
   if (!el) return;
-  el.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+  el.scrollIntoView({ block: center ? 'center' : 'nearest', behavior: reduce ? 'auto' : 'smooth' });
   const inp = $('#cin', el);
   if (inp && (inp.tagName === 'TEXTAREA' || !$('.chips', el))) inp.focus({ preventScroll: true });
 }
@@ -785,14 +807,15 @@ document.addEventListener('click', e => {
   else if (act === 'custom') submitCustom(p);
   else if (act === 'skip') answer(p, { skip: true });
   else if (act === 'sample') { const t = $('#cin'); if (t) { t.value = SAMPLE_SCRIPT; t.focus(); } }
-  else if (act === 'edit') { st.cur = +b.dataset.i; pending = null; save(); updateChat(p); focusArea(); }
+  else if (act === 'edit') { st.cur = +b.dataset.i; pending = null; save(); updateChat(p); updateOut(p); focusArea(true); }
+  else if (act === 'keep') { st.cur = firstOpen(p, 0); pending = null; save(); updateChat(p); updateOut(p); }
   else if (act === 'tab') { st.tab = b.dataset.v; save(); updateOut(p); }
   else if (act === 'lang') { st.lang = b.dataset.v; save(); updateOut(p); }
   else if (act === 'copy') copy(OUTCACHE[+b.dataset.i] || '', $('#pr' + b.dataset.i));
   else if (act === 'copyall') copy(OUTCACHE.map((t, i) => `[${i + 1}]\n${t}`).join('\n\n'), null);
   else if (act === 'example') {
     st.a = PAGES[p].example(); st.cur = Q.length; pending = null; save();
-    updateChat(p); updateOut(p); toast('예시 답을 채웠어요. ‘고치기’로 하나씩 바꿔 보세요.');
+    updateChat(p); updateOut(p); toast('예시 답을 채웠어요. 바꾸고 싶은 답을 눌러 보세요.');
   }
   else if (act === 'reset') {
     if (!resetArm) { resetArm = true; b.textContent = '한 번 더 누르면 지워져요'; return; }
