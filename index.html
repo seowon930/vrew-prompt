@@ -384,7 +384,7 @@ const SCRIPT_Q = [
   { id: 'topic', ask: '주제가 무엇인가요?', hint: '한 줄이면 충분해요.', type: 'text', placeholder: '예: 물의 순환, 『어린 왕자』, 복도 안전' },
   { id: 'aud', ask: '누가 보나요?', type: 'single', custom: '직접 쓰기',
     options: [o('초등 저학년'), o('초등 고학년'), o('중학생'), o('고등학생'), o('학부모'), o('동료 선생님')] },
-  { id: 'len', ask: '얼마나 길게 만들까요?', type: 'single',
+  { id: 'len', ask: '얼마나 길게 만들까요?', hint: '원하는 길이가 없으면 직접 써 주세요. 초를 쓰면 문장 수를 알아서 계산해요.', type: 'single', custom: '직접 쓰기 예: 45초, 1분 30초',
     options: [o('15초 안팎 (4~5문장)', '', '15초'), o('30초 안팎 (8~10문장)', '', '30초'), o('1분 안팎 (15~18문장)', '', '1분'), o('2분 안팎 (30문장 안팎)', '', '2분')] },
   { id: 'voice', ask: '누가 말하나요?', type: 'single', custom: '직접 쓰기 예: 선생님과 학생 둘이 대화',
     options: () => {
@@ -403,6 +403,17 @@ const SCRIPT_Q = [
     options: [o('생각해 볼 질문 던지기'), o('핵심 한 줄로 정리하기'), o('오늘부터 실천할 약속하기'), o('다음 편 예고하기')] },
 ];
 
+/* 직접 쓴 길이(예: 45초, 1분 30초, 50)를 '45초 안팎 (약 13문장)'으로. 한 문장을 3.5초 정도로 잡음 */
+function lenText(t) {
+  if (!t || /문장/.test(t)) return t;
+  const m = t.replace(/\s/g, '').match(/^(?:(\d+)분)?(?:(\d+)초?)?(?:안팎|정도|쯤)?$/);
+  if (!m || (!m[1] && !m[2])) return t;
+  const sec = (+(m[1] || 0)) * 60 + (+(m[2] || 0));
+  if (!sec) return t;
+  const n = Math.max(2, Math.round(sec / 3.5));
+  const label = (m[1] ? `${m[1]}분` : '') + (m[2] ? `${m[1] ? ' ' : ''}${m[2]}초` : '');
+  return `${label} 안팎 (약 ${n}문장)`;
+}
 function buildScript(a) {
   const g = (id, p) => V(a, id, 'ko') || (p ? ph(p) : '');
   const ratio = V(a, 'ratio', 'en');
@@ -418,7 +429,7 @@ function buildScript(a) {
     `- 주제: ${g('topic', '주제')}`,
     `- 보는 사람: ${g('aud', '보는 사람')}`,
     `- 화면: ${g('ratio', '화면 비율')}`,
-    `- 길이: ${g('len', '길이')}`,
+    `- 길이: ${lenText(V(a, 'len', 'ko')) || ph('길이')}`,
     `- 말하는 사람: ${g('voice', '말하는 사람')}`,
     `- 말투: ${g('tone', '말투')}`,
   ];
