@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="질문에 답하면 브루용 캐릭터·대본·이미지 프롬프트를 만들어 주는 연수용 도우미">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>숏폼 프롬프트 공방</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* 레이아웃: 상단 단계 탭 + 왼쪽은 질문-답 대화, 오른쪽은 실시간으로 채워지는 프롬프트 패널 (휴대폰은 위아래) */
+:root {
+  --paper: #F2F6F4; --surface: #FFFFFF; --sunk: #E8EFEC; --ink: #15201C; --muted: #55665F; --line: #D3DED9;
+  --accent: #0B7A69; --accent-ink: #FFFFFF; --accent-soft: #DCF0E9;
+  --clip: #E3A02C; --clip-soft: #FBEACB; --clip-ink: #5A3C04;
+  --display: 'Do Hyeon', 'IBM Plex Sans KR', 'Malgun Gothic', system-ui, sans-serif;
+  --body: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  --gut-l: max(16px, env(safe-area-inset-left, 0px));
+  --gut-r: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0F1513; --surface: #18201D; --sunk: #121A17; --ink: #E2EBE7; --muted: #94A69F; --line: #2A3632;
+    --accent: #3CC1A7; --accent-ink: #062520; --accent-soft: #15302A;
+    --clip: #F0B54A; --clip-soft: #3A2D12; --clip-ink: #F6DCA4; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0F1513; --surface: #18201D; --sunk: #121A17; --ink: #E2EBE7; --muted: #94A69F; --line: #2A3632;
+  --accent: #3CC1A7; --accent-ink: #062520; --accent-soft: #15302A;
+  --clip: #F0B54A; --clip-soft: #3A2D12; --clip-ink: #F6DCA4; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font: 15px/1.65 var(--body); word-break: keep-all; overflow-wrap: anywhere; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+
+/* 상단 */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); border-bottom: 1px solid var(--line); }
+.top-in { max-width: 1200px; margin: 0 auto; padding-left: var(--gut-l); padding-right: var(--gut-r); padding-block: 10px; display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: var(--display); font-size: 21px; letter-spacing: .01em; }
+.mark { width: 20px; height: 32px; border-radius: 5px; background: var(--accent); position: relative; flex: none; }
+.mark::after { content: ""; position: absolute; left: 4px; right: 4px; bottom: 5px; height: 4px; border-radius: 2px; background: var(--clip); }
+.nav { display: flex; gap: 4px; margin-left: auto; }
+.nav a { display: flex; align-items: center; gap: 7px; text-decoration: none; padding: 7px 12px; border-radius: 10px; color: var(--muted); font-weight: 500; }
+.nav a b { font-family: var(--mono); font-size: 12px; width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; border: 1px solid var(--line); color: var(--muted); }
+.nav a:hover { color: var(--ink); }
+.nav a.on { color: var(--ink); background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.nav a.on b { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.ext { text-decoration: none; font-size: 14px; color: var(--accent); font-weight: 600; padding: 7px 4px; }
+@media (max-width: 680px) {
+  .nav { order: 3; width: 100%; margin-left: 0; }
+  .nav a { flex: 1; justify-content: center; padding: 7px 6px; }
+  .ext { margin-left: auto; }
+}
+
+.wrap { max-width: 1200px; margin: 0 auto; padding-left: var(--gut-l); padding-right: var(--gut-r); padding-block: 32px 64px; }
+
+/* 홈 */
+.hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 40px; align-items: center; padding-block: 12px 40px; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .06em; color: var(--accent); margin: 0 0 12px; }
+.hero h1 { font-family: var(--display); font-weight: 400; font-size: clamp(40px, 6vw, 68px); line-height: 1.12; }
+.hero h1 em { font-style: normal; background: linear-gradient(transparent 62%, var(--clip-soft) 62%); }
+.lead { font-size: 17px; color: var(--muted); max-width: 46ch; margin: 18px 0 26px; }
+.cta { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 18px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 600; text-decoration: none; cursor: pointer; font-size: 15px; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.sm { padding: 6px 12px; font-size: 13px; border-radius: 9px; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+.demo { display: grid; justify-items: center; gap: 16px; }
+.phone { width: min(230px, 62vw); aspect-ratio: 9 / 16; max-width: 100%; border-radius: 26px; border: 8px solid var(--ink); background: var(--sunk); position: relative; overflow: hidden; }
+.phone .sky { position: absolute; inset: 0; background:
+  radial-gradient(circle at 70% 26%, var(--clip-soft) 0 18%, transparent 19%),
+  radial-gradient(ellipse at 30% 40%, var(--surface) 0 16%, transparent 17%),
+  radial-gradient(ellipse at 45% 37%, var(--surface) 0 13%, transparent 14%),
+  linear-gradient(180deg, var(--accent-soft), var(--sunk) 70%); }
+.phone .sea { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; background: var(--accent); opacity: .55; }
+.phone .cap { position: absolute; left: 10px; right: 10px; bottom: 16%; text-align: center; font-weight: 700; font-size: 14px; line-height: 1.4; color: #fff; text-shadow: 0 1px 0 #000, 0 0 4px #000; min-height: 2.8em; display: grid; place-items: end center; }
+.phone .tag { position: absolute; top: 10px; left: 10px; font: 500 11px/1 var(--mono); background: var(--surface); color: var(--muted); padding: 5px 7px; border-radius: 6px; }
+.strip { width: min(380px, 100%); display: flex; gap: 3px; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.strip .c { min-width: 0; display: grid; gap: 4px; }
+.strip .c i { display: block; height: 22px; border-radius: 4px; background: var(--clip-soft); border: 1px solid var(--clip); }
+.strip .c.on i { background: var(--clip); }
+.strip .c span { font: 500 10px/1 var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; }
+.demo small { color: var(--muted); font-size: 12px; }
+
+.sec-h { font-family: var(--display); font-weight: 400; font-size: 28px; margin-bottom: 16px; }
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 48px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: grid; gap: 8px; align-content: start; }
+.step .n { font: 500 12px/1 var(--mono); color: var(--accent); }
+.step h3 { font-size: 18px; }
+.step p { margin: 0; color: var(--muted); font-size: 14px; }
+.step .btn { justify-self: start; margin-top: 6px; }
+.step.vrew { background: var(--sunk); border-style: dashed; }
+@media (max-width: 960px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hero { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .steps { grid-template-columns: minmax(0, 1fr); } }
+
+.where { display: grid; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--surface); }
+.where > div { display: grid; grid-template-columns: 160px minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 14px 20px; border-top: 1px solid var(--line); }
+.where > div:first-child { border-top: 0; background: var(--sunk); font-size: 13px; color: var(--muted); font-weight: 600; }
+.where b { font-weight: 600; }
+@media (max-width: 640px) {
+  .where > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .where > div:first-child { display: none; }
+}
+
+/* 도구 페이지 */
+.ph-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
+.ph-head .eyebrow { margin-bottom: 6px; }
+.ph-head h1 { font-family: var(--display); font-weight: 400; font-size: 36px; line-height: 1.15; }
+.ph-head p { margin: 6px 0 0; color: var(--muted); }
+.ph-tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.tool { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 880px) { .tool { grid-template-columns: minmax(0, 1fr); } }
+
+.chat { display: grid; gap: 12px; min-width: 0; }
+.msg { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+.ava { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); flex: none; position: relative; }
+.ava::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 7px; height: 3px; border-radius: 2px; background: var(--clip); }
+.bubble { padding: 10px 14px; border-radius: 4px 14px 14px 14px; background: var(--surface); border: 1px solid var(--line); max-width: 52ch; min-width: 0; }
+.bubble .hint { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+.bubble .qn { font: 500 11px/1 var(--mono); color: var(--muted); display: block; margin-bottom: 4px; }
+.msg.user { justify-content: flex-end; align-items: center; }
+.msg.user .bubble { background: var(--accent); color: var(--accent-ink); border-color: transparent; border-radius: 14px 4px 14px 14px; white-space: pre-line; }
+.msg.user .bubble.skip { background: var(--sunk); color: var(--muted); }
+.fix { background: none; border: 0; color: var(--muted); font-size: 13px; cursor: pointer; padding: 4px 6px; border-radius: 6px; flex: none; }
+.fix:hover { color: var(--accent); text-decoration: underline; }
+.area { margin-left: 40px; background: var(--surface); border: 1.5px dashed var(--clip); border-radius: 14px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+@media (max-width: 520px) { .area { margin-left: 0; } }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--line); background: var(--surface); padding: 7px 14px; border-radius: 999px; font-size: 14px; cursor: pointer; text-align: left; }
+.chip:hover { border-color: var(--accent); }
+.chip.on { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+.chip.on::before { content: "✓ "; color: var(--accent); }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line); margin-right: 6px; vertical-align: -1px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.txt { flex: 1 1 200px; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: inherit; }
+textarea.txt { width: 100%; min-height: 180px; resize: vertical; line-height: 1.6; flex-basis: 100%; }
+.txt:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.row .spacer { flex: 1; }
+.done .bubble { border-color: var(--accent); }
+
+.out { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: grid; gap: 14px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 80px); max-height: calc(100vh - 104px); overflow: auto; min-width: 0; }
+@media (max-width: 880px) { .out { position: static; max-height: none; } }
+.out-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.out-h h2 { font-size: 16px; font-weight: 700; }
+.pill { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--clip-soft); color: var(--clip-ink); }
+.pill.ok { background: var(--accent-soft); color: var(--accent); }
+.seg { display: inline-flex; background: var(--sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: none; padding: 5px 11px; border-radius: 8px; font-size: 13px; cursor: pointer; color: var(--muted); }
+.seg button.on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); }
+.bar { display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+pre.prompt { margin: 0; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; font: 14px/1.75 var(--body); background: var(--sunk); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+mark.ph { background: var(--clip-soft); color: var(--clip-ink); border-radius: 4px; padding: 0 5px; font-weight: 600; }
+.scenes { display: grid; gap: 10px; }
+.scene { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 8px; min-width: 0; }
+.scene-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.scene-h span { font: 500 12px/1 var(--mono); color: var(--accent); }
+.scene pre.prompt { font-size: 13px; padding: 10px 12px; }
+.note { margin: 0; font-size: 13px; color: var(--muted); background: var(--paper); border-radius: 10px; padding: 10px 12px; }
+.note b { color: var(--ink); }
+.next { margin-top: 28px; display: flex; justify-content: flex-end; }
+
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; pointer-events: none; transition: .2s; max-width: calc(100% - 32px); z-index: 20; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.foot { max-width: 1200px; margin: 0 auto; padding-left: var(--gut-l); padding-right: var(--gut-r); padding-block: 20px 32px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <a class="brand" href="#home"><span class="mark" aria-hidden="true"></span><span>숏폼 프롬프트 공방</span></a>
+  <nav class="nav" aria-label="만들기 단계">
+    <a href="#char" data-r="char"><b>1</b>캐릭터</a>
+    <a href="#script" data-r="script"><b>2</b>대본</a>
+    <a href="#scene" data-r="scene"><b>3</b>이미지</a>
+  </nav>
+  <a class="ext" href="https://vrew.ai/ko/" target="_blank" rel="noopener">브루 열기 ↗</a>
+</div></header>
+<main id="app"></main>
+<footer class="foot">답한 내용은 이 브라우저에만 저장돼요. 다른 사람에게는 보이지 않아요.</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const o = (ko, en, label) => ({ ko, en: en === undefined ? ko : en, label: label || ko });
+const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- 저장 ---------- */
+const KEY = 'shortform-prompt.v1';
+let DATA = {};
+try { DATA = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { DATA = {}; }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(DATA)); } catch (e) {} }
+function S(p) { if (!DATA[p]) DATA[p] = { a: {}, cur: 0 }; return DATA[p]; }
+
+/* 답 꺼내기 */
+function V(a, id, lang) {
+  const x = a[id];
+  if (!x || x.skip || x.none) return '';
+  if (Array.isArray(x)) return x.map(i => i[lang]).filter(Boolean).join(', ');
+  return x[lang] || '';
+}
+const ph = t => '⟦' + t + '⟧';
+/* 받침에 따라 을/를 */
+const eul = w => { const c = String(w).trim().slice(-1).charCodeAt(0); return (c >= 0xAC00 && c <= 0xD7A3) ? ((c - 0xAC00) % 28 ? '을' : '를') : '을(를)'; };
+const cap1 = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
+/* ---------- 공통 선택지 ---------- */
+/* 그림체별 세부 규칙: Style(영어) · 그림체 · 비율 · 선 · 채색·명암 · 디테일·질감 · 조명 · 색감 · 피할 것 */
+const S_ = (name, en, desc, body, line, shade, detail, light, color, avoid) => ({ name, en, desc, body, line, shade, detail, light, color, avoid });
+const STYLE_DEFS = [
+  S_('3D 애니메이션', '3D animated feature film style, stylized proportions, soft subsurface skin, smooth rounded shapes, gentle global illumination, rich soft colors',
+    '극장용 3D 애니메이션 영화 속 캐릭터', '머리가 조금 큰 4~5등신, 둥글고 부드러운 몸', '외곽선 없이 형태와 명암으로 구분', '부드러운 그라데이션 명암, 은은한 반사광',
+    '머리카락은 큰 덩어리로 정리, 옷 주름은 단순하고 부드럽게', '따뜻한 햇빛과 부드러운 그림자', '채도가 적당한 따뜻한 색', '2D 선화, 실사 피부, 거친 질감, 무서운 표정'),
+  S_('2D 웹툰', 'Korean webtoon style digital illustration, clean crisp line art, flat cel shading with one shadow tone, bright clean colors',
+    '한국 웹툰 같은 깔끔한 2D 일러스트', '자연스러운 비율 (어린이는 4~5등신)', '일정한 두께의 깔끔하고 또렷한 선', '평평한 바탕색과 1단계 그림자',
+    '머리카락은 선으로 결을 살리되 단순하게', '밝고 고른 조명', '깨끗하고 밝은 색', '3D 렌더, 수채 번짐, 거친 붓질, 과한 그라데이션'),
+  S_('3D 치비', '3D chibi figure, 2 to 3 heads tall, oversized head, big glossy eyes, soft vinyl toy material, smooth rounded shapes, bright studio lighting',
+    '장난감 피규어 같은 2~3등신 3D 치비', '머리가 몸만큼 큰 2~3등신, 짧고 통통한 팔다리', '외곽선 없음', '매끈한 장난감 광택과 부드러운 그림자',
+    '머리카락과 옷은 큼직하고 단순한 덩어리', '위에서 비추는 밝은 스튜디오 조명', '파스텔에 가까운 밝은 색', '2D 선화, 실제 사람 비율, 복잡한 옷 주름, 거친 질감'),
+  S_('2D 치비', '2D chibi sticker illustration, 2 to 3 heads tall, very large shiny eyes, thick soft rounded outlines, flat cel shading, blush on cheeks, bright cute colors',
+    '스티커 같은 2~3등신 2D 치비', '머리가 몸만큼 큰 2~3등신, 짧은 팔다리', '굵고 둥글고 부드러운 외곽선', '1단계 셀 그림자, 볼 홍조',
+    '머리카락과 옷은 단순한 덩어리, 눈에 작은 하이라이트', '평평하고 밝은 조명', '밝고 선명한 색', '3D 렌더, 사실적인 비율, 복잡한 질감, 가는 선'),
+  S_('플랫 일러스트', 'flat vector illustration, simple geometric shapes, solid color fills, minimal or no outlines, no gradients, limited palette, modern and clean',
+    '도형으로 단순하게 만든 플랫 벡터 일러스트', '단순화된 4~5등신', '외곽선 없이 면으로만 구분', '그림자 거의 없이 단색 면',
+    '얼굴은 점과 선으로 아주 단순하게', '평평한 조명', '4~5가지로 제한한 깔끔한 색', '그라데이션, 질감, 3D 느낌, 복잡한 디테일'),
+  S_('디테일 일러스트', 'highly detailed digital illustration, painterly soft shading, rich hair and fabric textures, delicate rim light, polished concept-art quality',
+    '명암과 질감이 풍부한 고급 디지털 일러스트', '자연스러운 비율 (어린이는 4~5등신)', '얇고 섬세한 선, 부분적으로 생략', '여러 단계의 부드러운 명암과 반사광',
+    '머리카락 결, 옷감 질감, 작은 장식까지 표현', '테두리에 빛이 맺히는 입체 조명', '깊이 있고 조화로운 색', '단순한 플랫 채색, 굵은 선, 낙서 느낌'),
+  S_('픽셀', 'pixel art character, 32-bit retro game style, crisp square pixels, limited palette, clean pixel clusters, no anti-aliasing blur',
+    '레트로 게임 같은 픽셀아트 캐릭터', '3~4등신 게임 캐릭터 비율', '1픽셀 두께의 어두운 외곽선', '2~3단계 픽셀 명암',
+    '작은 픽셀 덩어리로 눈·머리·옷을 표현', '왼쪽 위에서 오는 단순한 빛', '16~32색 정도로 제한한 팔레트', '부드러운 그라데이션, 흐릿한 경계, 3D 렌더, 사진 질감'),
+  S_('미니 픽셀', 'tiny 16-bit pixel art sprite, very low resolution around 32x32 pixels, chunky visible pixels, minimal palette, cute game sprite',
+    '아주 작은 게임 스프라이트 같은 미니 픽셀아트', '2등신에 가까운 작은 스프라이트', '굵은 1픽셀 외곽선', '1단계 명암',
+    '눈은 점 두 개 정도로 최소화', '평평한 조명', '8~12색 정도의 아주 적은 색', '고해상도 디테일, 그라데이션, 흐릿함, 3D'),
+  S_('수채화 그림책', "watercolor children's picture book illustration, soft washes, gentle color bleeding, visible paper texture, light pencil lines, warm and cozy",
+    '그림책 속 맑은 수채화 일러스트', '머리가 조금 큰 3~4등신', '연필로 가볍게 그린 얇은 선', '물감이 번지는 부드러운 명암',
+    '종이 질감과 물 자국이 살짝 보이게', '따뜻하고 은은한 빛', '맑고 연한 파스텔 색', '매끈한 디지털 채색, 굵은 외곽선, 3D'),
+  S_('클레이', 'claymation character, handmade plasticine figure, soft matte clay texture with subtle fingerprints, rounded chunky shapes, miniature set lighting',
+    '손으로 빚은 점토 인형 캐릭터', '통통하고 둥근 3~4등신', '외곽선 없음', '무광 점토의 부드러운 그림자',
+    '손자국과 이음새가 살짝 보이는 점토 질감', '미니어처 촬영장 같은 부드러운 조명', '따뜻하고 포근한 색', '매끈한 플라스틱 광택, 2D 선화, 실사 피부'),
+  S_('종이공예', 'layered paper-cut craft illustration, cut paper shapes stacked in layers, visible paper fiber texture, soft drop shadows between layers, handmade feel',
+    '색종이를 오려 겹겹이 붙인 종이공예', '단순화된 3~4등신', '외곽선 대신 종이 가장자리', '층 사이의 부드러운 그림자로 입체감',
+    '종이 섬유 질감과 가위로 자른 가장자리', '위에서 비추는 부드러운 빛', '색종이 같은 차분한 색', '그라데이션 채색, 선화, 3D 렌더, 사진 질감'),
+  S_('레트로 애니', '1990s retro anime style, hand-painted cel animation look, slightly grainy film texture, soft muted colors, classic anime eyes',
+    '90년대 TV 애니메이션 같은 레트로 셀 그림', '5~6등신 애니메이션 비율 (어린이는 4등신)', '손으로 그린 듯한 약간 거친 선', '2단계 셀 그림자',
+    '필름 노이즈와 살짝 바랜 느낌', '노을빛처럼 따뜻한 조명', '채도가 조금 낮은 빈티지 색', '매끈한 최신 디지털 채색, 3D, 지나치게 선명한 색'),
+  S_('애니 캐릭터', 'modern anime character illustration, clean lineart, vivid colors, glossy detailed eyes, soft two-tone cel shading, key visual quality',
+    '요즘 애니메이션 포스터 같은 캐릭터 일러스트', '5~6등신 (어린이는 4등신)', '깔끔하고 강약 있는 선', '2단계 셀 그림자와 부드러운 하이라이트',
+    '눈동자의 반짝임, 머리카락 하이라이트', '밝고 화사한 조명', '선명하고 화사한 색', '3D 렌더, 수채 번짐, 실사 질감'),
+  S_('일본 애니메이션', 'Japanese TV anime style, consistent clean line art, flat cel shading, large expressive eyes, simple animation-friendly design',
+    '일본 TV 애니메이션 한 장면 같은 그림', '5~6등신 애니메이션 비율 (어린이는 4등신)', '일정한 두께의 깔끔한 선', '1~2단계 셀 그림자',
+    '움직이기 쉬운 단순한 디자인', '고르고 밝은 조명', '맑고 산뜻한 색', '3D 렌더, 과한 질감, 사실적인 피부'),
+  S_('실사 3D 인물', 'photorealistic 3D character render, realistic human proportions, natural skin texture, detailed hair strands, realistic fabric, soft cinematic lighting',
+    '실제 사람처럼 보이는 실사 3D 인물', '실제 사람 비율', '외곽선 없음', '사실적인 빛과 그림자',
+    '피부결, 머리카락 한 올, 옷감 질감까지', '영화 같은 부드러운 조명', '자연스러운 실제 색', '만화 선화, 과장된 비율, 플라스틱 질감'),
+];
+const STYLE_BY = Object.fromEntries(STYLE_DEFS.map(d => [d.name, d]));
+const STYLES = STYLE_DEFS.map(d => Object.assign(o(d.desc, d.en, d.name), { key: d.name }));
+const RATIO_TXT = { '1:1': '정사각형 1:1', '9:16': '세로 9:16', '16:9': '가로 16:9' };
+const COLORS = [
+  ['노랑', '#FFD952'], ['분홍', '#FF8FB1'], ['하늘', '#7CC8FF'], ['연두', '#9BE07A'], ['보라', '#B79CFF'], ['주황', '#FF9F5A'], ['빨강', '#F25C54'], ['남색', '#3B4A9C']
+].map(([n, h]) => Object.assign(o(`${h} (${n})`, h, n), { sw: h }));
+
+function styleOf(a) {
+  const s = a.style;
+  if (!s || s.skip) return null;
+  const d = STYLE_BY[s.key || s.label];
+  return d ? { name: d.name, d } : { name: s.ko, d: null };
+}
+function styleLines(st, full) {
+  if (!st) return ['[스타일] ' + ph('그림체')];
+  if (!st.d) return [`[스타일] ${st.name}`, `- 그림체: ${st.name}`];
+  const d = st.d, L = [`[스타일] ${d.name}`, `- Style: ${d.en}`];
+  if (full) L.push(`- 그림체: ${d.desc}`, `- 비율: ${d.body}`, `- 선: ${d.line}`, `- 채색·명암: ${d.shade}`, `- 디테일·질감: ${d.detail}`, `- 조명: ${d.light}`, `- 색감: ${d.color}`);
+  L.push(`- 피할 것: ${d.avoid}`);
+  return L;
+}
+
+/* ---------- 1. 캐릭터 ---------- */
+const CHAR_Q = [
+  { id: 'kind', ask: '어떤 캐릭터를 만들까요?', hint: '영상 내내 나올 주인공이에요.', type: 'single', custom: '직접 쓰기 예: 안경 쓴 수달',
+    options: [o('초등학생 여자아이', 'an elementary school girl'), o('초등학생 남자아이', 'an elementary school boy'), o('친절한 선생님', 'a friendly teacher'), o('아기 곰', 'a baby bear'), o('아기 고양이', 'a little kitten'), o('동글동글한 작은 로봇', 'a small round robot'), o('꼬마 요정', 'a tiny fairy')] },
+  { id: 'name', ask: '캐릭터 이름이 있나요?', hint: '대본과 장면 프롬프트에 쓰여요. 그림 프롬프트에는 들어가지 않아요.', type: 'text', optional: true, placeholder: '예: 토리' },
+  { id: 'look', ask: '생김새 특징을 골라 주세요.', hint: '여러 개 골라도 되고, 직접 써서 더해도 돼요.', type: 'multi', optional: true, custom: '직접 더하기 예: 볼에 반창고',
+    options: [o('짧은 단발머리', 'short bob hair'), o('긴 생머리', 'long straight hair'), o('곱슬머리', 'curly hair'), o('양 갈래 머리', 'twin pigtails'), o('동그란 안경', 'round glasses'), o('주근깨', 'freckles'), o('반짝이는 큰 눈', 'big sparkling eyes'), o('발그레한 볼', 'rosy cheeks')] },
+  { id: 'outfit', ask: '어떤 옷을 입었나요?', type: 'single', custom: '직접 쓰기 예: 노란 비옷과 장화',
+    options: [o('파란 후드티와 청바지', 'a blue hoodie and jeans'), o('교복', 'a school uniform'), o('멜빵바지', 'denim overalls'), o('색동 한복', 'a colorful hanbok'), o('하얀 실험 가운', 'a white lab coat'), o('우주복', 'a space suit')] },
+  { id: 'prop', ask: '손에 든 물건이 있나요?', type: 'single', custom: '직접 쓰기 예: 지구본',
+    options: [Object.assign(o('없음', ''), { none: true }), o('책', 'a book'), o('커다란 연필', 'a big pencil'), o('돋보기', 'a magnifying glass'), o('마이크', 'a microphone'), o('태블릿', 'a tablet')] },
+  { id: 'pose', ask: '어떤 동작을 하고 있나요?', type: 'single', custom: '직접 쓰기 예: 점프하며 만세',
+    options: [o('정면을 보고 손 흔들기', 'standing facing forward and waving'), o('엄지 척 하기', 'giving a thumbs up'), o('손으로 옆을 가리키며 설명하기', 'pointing to the side as if explaining'), o('책 읽기', 'reading a book'), o('신나게 뛰어가기', 'running happily')] },
+  { id: 'face', ask: '표정은 어때요?', type: 'single', custom: '직접 쓰기 예: 한쪽 눈 윙크',
+    options: [o('활짝 웃는 얼굴', 'a big bright smile'), o('호기심 가득한 얼굴', 'a curious expression'), o('깜짝 놀란 얼굴', 'a surprised expression'), o('진지한 얼굴', 'a serious, focused expression'), o('수줍게 웃는 얼굴', 'a shy smile')] },
+  { id: 'bg', ask: '배경은 어디인가요?', hint: '첫 그림은 단색 배경을 추천해요. 캐릭터가 또렷하게 나와서 다음 그림에 쓰기 좋아요.', type: 'single', custom: '직접 쓰기 예: 노을 진 바닷가',
+    options: [o('단색 배경', 'a plain light solid-color background', '단색 배경 (캐릭터만)'), o('밝은 교실', 'a bright classroom'), o('아늑한 도서관', 'a cozy library'), o('학교 운동장', 'a school playground'), o('과학실', 'a science lab'), o('햇살 비치는 숲속', 'a sunny forest'), o('별이 가득한 우주', 'outer space full of stars')] },
+  { id: 'style', ask: '어떤 그림체로 그릴까요?', hint: '장면 그림도 같은 그림체로 맞추면 영상이 자연스러워요.', type: 'single', custom: '직접 쓰기 예: 크레파스 그림', options: STYLES },
+  { id: 'color', ask: '포인트 컬러를 골라 주세요.', hint: '옷·리본·소품 같은 곳에 들어가는 색이에요. 영상 전체 색감을 맞춰 줘요.', type: 'single', optional: true, custom: '직접 쓰기 예: #3366FF 또는 민트색', options: COLORS },
+  { id: 'ratio', ask: '그림 비율을 골라 주세요.', hint: '캐릭터 기본 그림은 1:1을 많이 써요.', type: 'single',
+    options: [o('1:1', '1:1', '1:1 정사각형'), o('9:16', '9:16', '9:16 세로 · 숏폼'), o('16:9', '16:9', '16:9 가로')] },
+];
+
+function charDesc(lang) {
+  const a = S('char').a;
+  if (!a.kind || a.kind.skip) return '';
+  const parts = [V(a, 'kind', lang)];
+  const look = V(a, 'look', lang); if (look) parts.push(look);
+  const out = V(a, 'outfit', lang); if (out) parts.push(lang === 'ko' ? out + ' 차림' : 'wearing ' + out);
+  const pr = V(a, 'prop', lang); if (pr) parts.push(lang === 'ko' ? pr + eul(pr) + ' 들고 있음' : 'holding ' + pr);
+  return parts.join(', ');
+}
+const charReady = () => !!(S('char').a.kind && !S('char').a.kind.skip);
+
+function subjectLine(a) {
+  const kind = V(a, 'kind', 'ko') || ph('누구');
+  const look = V(a, 'look', 'ko'), out = V(a, 'outfit', 'ko'), pr = V(a, 'prop', 'ko');
+  return [kind, look, out ? out + ' 차림' : ph('옷'), pr ? pr + eul(pr) + ' 들고 있음' : ''].filter(Boolean).join(', ');
+}
+function buildCharBase(a) {
+  const st = styleOf(a), name = st ? st.name : ph('그림체');
+  const color = V(a, 'color', 'ko');
+  const L = [
+    '캐릭터 1명을 그려 줘. 가장 중요한 건 아래 [스타일]을 정확하게 지키는 거야.',
+    '',
+    ...styleLines(st, true),
+    '',
+    '[캐릭터]',
+    `- 피사체: ${subjectLine(a)}`,
+    `- 동작·표정: ${V(a, 'pose', 'ko') || ph('동작')}, ${V(a, 'face', 'ko') || ph('표정')}`,
+    `- 장소: ${V(a, 'bg', 'ko') || ph('배경')}`,
+    '- 캐릭터 상품으로 내놓아도 될 만큼 완성도 있게 그려 줘. 얼굴은 귀엽고 매력적으로, 눈·코·입은 크기와 자리가 잘 어울리게, 표정은 생기 있게.',
+    '- 적힌 특징은 바꾸지 말고, 적히지 않은 얼굴형·눈 색·머리 모양·옷의 색과 소재·장식은 위 스타일에 맞게 구체적으로 정해서 그려 줘.'
+  ];
+  if (color) L.push(`- 포인트 컬러: ${color}. 옷·리본·소품 같은 포인트에 이 색을 써 줘. 피사체에 정해 둔 색이 있으면 그 색을 먼저 지켜.`);
+  L.push(
+    '',
+    '[화면]',
+    `- ${RATIO_TXT[V(a, 'ratio', 'en')] || ph('비율')}. 머리부터 발끝까지 전신이 모두 보이게 캐릭터를 가운데에 두고, 위아래에 여백을 남겨 줘.`,
+    '- 앞으로 여러 영상 장면에 계속 쓸 기준 캐릭터야. 다른 그림에서도 똑같이 그릴 수 있게 얼굴·머리·옷의 특징을 또렷하게 그려 줘.',
+    '- 이미지 안에 글자, 로고, 워터마크는 넣지 마.',
+    '',
+    `마지막으로 한 번 더: 그림 전체를 반드시 '${name}' 스타일로 완성해 줘.`
+  );
+  return L.join('\n');
+}
+function buildCharSheet(a) {
+  const st = styleOf(a), name = st ? st.name : ph('그림체');
+  return [
+    '방금 그린 기준 캐릭터로 캐릭터 시트를 만들어 줘. 얼굴, 머리 모양, 옷, 색은 하나도 바꾸지 마.',
+    '',
+    ...styleLines(st, false),
+    '',
+    '[캐릭터]',
+    `- 피사체: ${subjectLine(a)}`,
+    '',
+    '[구성]',
+    '- 윗줄: 앞모습, 옆모습, 뒷모습 전신 3개를 같은 크기로 나란히',
+    '- 아랫줄: 얼굴 표정 4가지 (웃음, 놀람, 슬픔, 화남)',
+    '- 흰 배경, 가로 16:9 한 장',
+    '- 이미지 안에 글자, 설명, 화살표는 넣지 마.',
+    '',
+    `그림 전체를 반드시 '${name}' 스타일로 그려 줘.`
+  ].join('\n');
+}
+
+/* ---------- 2. 대본 ---------- */
+const SCRIPT_Q = [
+  { id: 'ratio', ask: '어떤 화면으로 만들까요?', type: 'single',
+    options: [o('세로 9:16 숏폼', '9:16', '세로 9:16 · 숏폼, 릴스'), o('가로 16:9', '16:9', '가로 16:9 · 유튜브, 수업 화면')] },
+  { id: 'kind', ask: '어떤 영상인가요?', type: 'single', custom: '직접 쓰기 예: 현장체험학습 안내',
+    options: [o('수업 도입 영상'), o('개념 설명 영상'), o('책 소개 영상'), o('캠페인 영상 (안전·환경·인성)'), o('학급·학교 안내 영상'), o('학생 활동 소개 영상')] },
+  { id: 'topic', ask: '주제가 무엇인가요?', hint: '한 줄이면 충분해요.', type: 'text', placeholder: '예: 물의 순환, 『어린 왕자』, 복도 안전' },
+  { id: 'aud', ask: '누가 보나요?', type: 'single', custom: '직접 쓰기',
+    options: [o('초등 저학년'), o('초등 고학년'), o('중학생'), o('고등학생'), o('학부모'), o('동료 선생님')] },
+  { id: 'len', ask: '얼마나 길게 만들까요?', type: 'single',
+    options: [o('15초 안팎 (4~5문장)', '', '15초'), o('30초 안팎 (8~10문장)', '', '30초'), o('1분 안팎 (15~18문장)', '', '1분'), o('2분 안팎 (30문장 안팎)', '', '2분')] },
+  { id: 'voice', ask: '누가 말하나요?', type: 'single', custom: '직접 쓰기 예: 선생님과 학생 둘이 대화',
+    options: () => {
+      const list = [];
+      if (charReady()) {
+        const nm = V(S('char').a, 'name', 'ko');
+        list.push(o(`캐릭터${nm ? ` '${nm}'` : ''}가 직접 말함 (${charDesc('ko')})`, '', `1단계 캐릭터${nm ? ` ‘${nm}’` : ''}가 말해요`));
+      }
+      list.push(o('캐릭터 한 명이 직접 말함', '', '캐릭터 한 명이 말해요'), o('내레이터가 설명함', '', '내레이터가 설명해요'), Object.assign(o('캐릭터 둘이 대화함', '', '캐릭터 둘이 대화해요'), { dialog: true }));
+      return list;
+    } },
+  { id: 'tone', ask: '말투는 어떻게 할까요?', type: 'single', custom: '직접 쓰기',
+    options: [o('친구처럼 다정한 반말'), o('부드러운 존댓말'), o('신나는 유튜버 말투'), o('차분한 다큐멘터리 말투')] },
+  { id: 'must', ask: '꼭 들어가야 할 내용이 있나요?', hint: '핵심 낱말이나 성취기준을 써 두면 빠지지 않아요.', type: 'text', optional: true, placeholder: '예: 증발, 응결, 강수' },
+  { id: 'end', ask: '어떻게 끝낼까요?', type: 'single', custom: '직접 쓰기',
+    options: [o('생각해 볼 질문 던지기'), o('핵심 한 줄로 정리하기'), o('오늘부터 실천할 약속하기'), o('다음 편 예고하기')] },
+];
+
+function buildScript(a) {
+  const g = (id, p) => V(a, id, 'ko') || (p ? ph(p) : '');
+  const ratio = V(a, 'ratio', 'en');
+  const chars = ratio === '16:9' ? '25자' : '18자';
+  const dialog = a.voice && (a.voice.dialog || /대화/.test(a.voice.ko || ''));
+  const must = V(a, 'must', 'ko');
+  const lines = [
+    '너는 학교에서 쓰는 숏폼 영상 대본 작가야.',
+    '아래 조건으로 브루(Vrew)에 바로 붙여 넣을 대본을 써 줘.',
+    '',
+    '[영상 정보]',
+    `- 종류: ${g('kind', '영상 종류')}`,
+    `- 주제: ${g('topic', '주제')}`,
+    `- 보는 사람: ${g('aud', '보는 사람')}`,
+    `- 화면: ${g('ratio', '화면 비율')}`,
+    `- 길이: ${g('len', '길이')}`,
+    `- 말하는 사람: ${g('voice', '말하는 사람')}`,
+    `- 말투: ${g('tone', '말투')}`,
+  ];
+  if (must) lines.push(`- 꼭 넣을 내용: ${must}`);
+  lines.push(
+    '',
+    '[구성]',
+    '1. 첫 문장은 3초 안에 궁금해지는 질문이나 놀라운 사실로 시작해.',
+    `2. 가운데는 ${g('aud', '보는 사람')} 눈높이에 맞는 쉬운 말과 생활 속 예시로 설명해.`,
+    `3. 마지막은 '${g('end', '마무리 방식')}' 방식으로 끝내.`,
+    '',
+    '[브루용 작성 규칙]',
+    '- 한 줄에 한 문장만 써. 브루에서 자막과 장면을 문장 단위로 나누기 쉬워.',
+    `- 한 문장은 ${chars} 안팎으로 짧게 써.`,
+    '- 화면 지시, 괄호, 이모지, 번호 없이 소리 내어 읽을 문장만 써.',
+    '- 어려운 한자어 대신 쉬운 우리말을 써.'
+  );
+  if (dialog) lines.push('- 대화 형식이니까 줄 맨 앞에 말하는 사람 이름과 쌍점(:)을 붙여.');
+  lines.push(
+    '',
+    '[출력]',
+    '① 대본: 브루에 붙여 넣을 문장만 (설명 없이)',
+    '② 영상 제목 후보 3개'
+  );
+  return lines.join('\n');
+}
+
+/* ---------- 3. 장면 ---------- */
+const SAMPLE_SCRIPT = [
+  '어제 내린 비, 아주 오래된 물이라는 거 알아?',
+  '공룡이 마신 물일 수도 있어.',
+  '물은 사라지지 않고 계속 돌고 돌거든.',
+  '햇볕을 받으면 바닷물이 수증기가 돼.',
+  '이걸 증발이라고 해.',
+  '하늘로 올라간 수증기는 차가워지며 뭉쳐.',
+  '그게 바로 구름이야.',
+  '물방울이 무거워지면 비가 되어 떨어지지.',
+  '그리고 강을 따라 다시 바다로 가.',
+  '오늘 마신 물 한 컵, 다음엔 어디로 갈까?'
+].join('\n');
+
+const SCENE_Q = [
+  { id: 'who', ask: '장면에 누가 나오나요?', hint: '브루에서 캐릭터 그림을 ‘참고 이미지’로 올릴 거라면 ‘참고 이미지 속 캐릭터’를 고르세요.', type: 'single', custom: '직접 쓰기 예: 빨간 모자를 쓴 다람쥐',
+    options: () => {
+      const list = [];
+      if (charReady()) {
+        const nm = V(S('char').a, 'name', 'ko');
+        list.push(Object.assign(o(charDesc('ko'), charDesc('en'), `1단계에서 만든 캐릭터${nm ? ` ‘${nm}’` : ''} (${V(S('char').a, 'kind', 'ko')})`), { fromChar: true }));
+      }
+      list.push(Object.assign(o('참고 이미지 속 캐릭터', 'the character in the reference image', '참고 이미지 속 캐릭터'), { ref: true }));
+      list.push(Object.assign(o('', '', '캐릭터 없이 풍경·사물만'), { none: true, nochar: true }));
+      return list;
+    } },
+  { id: 'style', ask: '그림체는 무엇으로 할까요?', hint: '1단계에서 캐릭터를 만들었다면 그때 고른 그림체가 맨 앞에 나와요. 같은 그림체를 고르면 장면이 자연스럽게 이어져요.', type: 'single', custom: '직접 쓰기 예: 크레파스 그림',
+    options: () => {
+      const cs = S('char').a.style;
+      const list = [];
+      if (cs && !cs.skip) list.push(Object.assign(o(cs.ko, cs.en, `1단계에서 만든 캐릭터와 같은 그림체 (${cs.label || cs.ko})`), { key: cs.key || cs.label }));
+      return list.concat(STYLES);
+    } },
+  { id: 'mood', ask: '전체 색감은 어떻게 할까요?', hint: '모든 장면 그림에 똑같이 적용돼요.', type: 'single', optional: true, custom: '직접 쓰기 예: 봄날 같은 연둣빛',
+    options: [o('밝고 화사한 색감'), o('따뜻한 파스텔 톤'), o('선명하고 쨍한 색감'), o('차분하고 부드러운 색감'), o('노을빛 따뜻한 톤'), o('푸른빛 시원한 톤')] },
+];
+
+function sentences(text) {
+  return String(text || '').split(/\n+/)
+    .flatMap(l => l.trim().split(/(?<=[.!?…])\s+/))
+    .map(s => s.replace(/^\s*(\d+[.)]|[-•*])\s*/, '').trim())
+    .filter(Boolean);
+}
+function sceneCommon(a) {
+  const st = styleOf(a);
+  const nochar = !!(a.who && a.who.nochar);
+  return { st, nochar, name: st ? st.name : ph('그림체'), who: V(a, 'who', 'ko') || (nochar ? '' : ph('등장인물')) };
+}
+/* 브루 '비디오 꾸미기 → AI 이미지 → 이미지 프롬프트' 칸: 모든 장면에 한 번에 적용되는 짧은 설명 */
+function buildVrew(a) {
+  const c = sceneCommon(a), d = c.st && c.st.d;
+  const styleTxt = !c.st ? ph('그림체') : d ? `${d.name} (${d.en})` : c.st.name;
+  const cc = a.who && a.who.fromChar ? V(S('char').a, 'color', 'ko') : '';
+  const colors = [V(a, 'mood', 'ko'), cc ? `포인트 컬러 ${cc}` : ''].filter(Boolean);
+  const L = [`그림체: ${styleTxt}.`];
+  if (c.nochar) L.push('사람이나 캐릭터 없이 풍경과 사물 위주로 그려 줘.');
+  else if (a.who && a.who.ref) L.push('주인공: 참고 이미지에 있는 캐릭터. 얼굴·머리 모양·옷·색을 참고 이미지와 똑같이 지키고, 모든 장면에서 같은 모습으로 그려 줘. 참고 이미지 속 배경은 따라 하지 말고 장면마다 대본에 맞는 배경으로 그려 줘.');
+  else L.push(`주인공: ${c.who}. 모든 장면에서 같은 얼굴·머리·옷으로 그려 줘.`);
+  if (colors.length) L.push(`색감: ${colors.join(', ')}.`);
+  L.push(`피할 것: ${d ? d.avoid + ', ' : ''}이미지 안의 글자·자막·말풍선.`);
+  return L.join('\n');
+}
+
+/* ---------- 페이지 정의 ---------- */
+const PAGES = {
+  char: {
+    step: 1, title: '캐릭터 만들기', desc: '영상 내내 등장할 주인공 캐릭터의 그림 프롬프트를 만들어요.',
+    intro: '질문에 하나씩 답하면 프롬프트 칸이 바로바로 채워져요. 고르기 어려우면 ‘예시로 채우기’를 눌러 보세요.',
+    Q: () => CHAR_Q, langs: ['ko'],
+    outs: [{ id: 'base', label: '기준 캐릭터', build: buildCharBase }, { id: 'sheet', label: '캐릭터 시트', build: buildCharSheet }],
+    where: '<b>붙여 넣을 곳</b> ChatGPT, Gemini, <a href="https://www.canva.com/ko_kr/" target="_blank" rel="noopener">Canva</a> 같은 이미지 생성 AI나 브루의 AI 이미지 기능. 기준 캐릭터를 먼저 만들고, 같은 대화창에서 캐릭터 시트를 이어서 요청하세요.',
+    next: { href: '#script', label: '다음: 대본 프롬프트 만들기 →' },
+    example: () => {
+      const op = (id, i) => CHAR_Q.find(q => q.id === id).options[i];
+      return { kind: op('kind', 0), name: o('토리'), look: [op('look', 1), op('look', 7)], outfit: op('outfit', 0), prop: op('prop', 3), pose: op('pose', 0), face: op('face', 0), bg: op('bg', 0), style: STYLES[3], color: COLORS[0], ratio: op('ratio', 0) };
+    }
+  },
+  script: {
+    step: 2, title: '대본 만들기', desc: '영상 종류와 주제를 고르면 브루에 바로 붙일 수 있는 대본을 요청하는 프롬프트를 만들어요.',
+    intro: '대본은 AI가 써 주고, 여기서는 AI에게 보낼 요청문을 만들어요. 화면 비율부터 정해 볼까요?',
+    Q: () => SCRIPT_Q, langs: ['ko'],
+    outs: [{ id: 'script', label: '대본 요청', build: a => buildScript(a) }],
+    where: '<b>붙여 넣을 곳</b> ChatGPT, Gemini, Claude 같은 대화형 AI. 받은 ① 대본을 브루의 ‘텍스트로 비디오 만들기’ 2단계 대본 작성 칸에 붙여 넣으세요.',
+    next: { href: '#scene', label: '다음: 이미지 프롬프트 만들기 →' },
+    example: () => ({ ratio: SCRIPT_Q[0].options[0], kind: SCRIPT_Q[1].options[1], topic: o('물의 순환'), aud: SCRIPT_Q[3].options[1], len: SCRIPT_Q[4].options[1], voice: SCRIPT_Q[5].options()[0], tone: SCRIPT_Q[6].options[0], must: o('증발, 응결, 강수'), end: SCRIPT_Q[8].options[0] })
+  },
+  scene: {
+    step: 3, title: '이미지 프롬프트 만들기', desc: '브루 ‘비디오 꾸미기’의 이미지 프롬프트 칸에 넣을 문장을 만들어요.',
+    intro: '브루에서 대본으로 영상을 만들면 3단계 ‘비디오 꾸미기’에 이미지 프롬프트 칸이 있어요. 거기에 넣을 문장을 만들어서, 모든 그림이 같은 주인공과 같은 그림체로 나오게 해요.',
+    Q: () => SCENE_Q, langs: ['ko'],
+    outs: [{ id: 'vrew', label: '브루 이미지 프롬프트', build: buildVrew, count: true }],
+    where: '<b>붙여 넣을 곳</b> 브루 ‘텍스트로 비디오 만들기’ → 3단계 비디오 꾸미기 → AI 이미지를 켜고 ‘이미지 프롬프트’ 칸. 1단계에서 만든 기준 캐릭터 그림을 ‘참고 이미지’로 올리면 얼굴이 더 잘 유지돼요. ‘참고 이미지 속 캐릭터’를 골랐다면 참고 이미지를 꼭 올려 주세요.',
+    next: { href: 'https://vrew.ai/ko/', label: '브루에서 영상 만들기 ↗', ext: true },
+    example: () => {
+      const q = id => SCENE_Q.find(x => x.id === id);
+      const opts = id => getOpts(q(id));
+      return { who: charReady() ? opts('who')[0] : o('단발머리에 동그란 안경을 쓴 초등학생 여자아이, 파란 후드티와 청바지 차림', 'an elementary school girl with short bob hair and round glasses, wearing a blue hoodie and jeans', '단발머리 안경 소녀'),
+        style: opts('style')[0], mood: opts('mood')[0] };
+    }
+  }
+};
+
+/* ---------- 상태 도우미 ---------- */
+let route = null, pending = null, resetArm = false, OUTCACHE = [];
+const getOpts = q => typeof q.options === 'function' ? q.options() : (q.options || []);
+function firstOpen(p, from) {
+  const Q = PAGES[p].Q(), a = S(p).a;
+  for (let i = from; i < Q.length; i++) if (a[Q[i].id] === undefined) return i;
+  for (let i = 0; i < Math.min(from, Q.length); i++) if (a[Q[i].id] === undefined) return i;
+  return Q.length;
+}
+function labelOf(q, x) {
+  if (!x) return '';
+  if (x.skip) return '건너뛰었어요';
+  if (Array.isArray(x)) return x.length ? x.map(i => i.label || i.ko).join(', ') : '없음';
+  if (q.type === 'longtext') {
+    const ss = sentences(x.ko);
+    const first = ss.slice(0, 2).join('\n');
+    return first + (ss.length > 2 ? `\n… 모두 ${ss.length}문장` : '');
+  }
+  return x.label || x.ko;
+}
+
+/* ---------- 홈 ---------- */
+function renderHome() {
+  const lines = SAMPLE_SCRIPT.split('\n').slice(0, 6);
+  let t = 0;
+  const clips = lines.map((l, i) => {
+    const dur = Math.max(1.4, l.length * 0.16);
+    const tc = `00:${String(Math.floor(t)).padStart(2, '0')}.${Math.round((t % 1) * 10)}`;
+    t += dur;
+    return `<div class="c${i === 0 ? ' on' : ''}" style="flex:${dur.toFixed(2)}"><i></i><span>${tc}</span></div>`;
+  }).join('');
+  $('#app').innerHTML = `
+  <div class="wrap">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">브루로 숏폼 영상 만들기 연수</p>
+        <h1>질문에 답하면<br><em>프롬프트</em>가 완성돼요</h1>
+        <p class="lead">캐릭터 그림, 영상 대본, 장면 그림에 필요한 프롬프트를 차례로 만들어요. 고르고 답하기만 하면 되고, 결과는 복사해서 AI에 붙여 넣으면 돼요.</p>
+        <div class="cta">
+          <a class="btn primary" href="#char">캐릭터부터 만들기</a>
+          <a class="btn" href="#script">대본 프롬프트 바로 만들기</a>
+        </div>
+      </div>
+      <div class="demo" aria-hidden="true">
+        <div class="phone"><div class="sky"></div><div class="sea"></div><span class="tag">9:16</span><div class="cap" id="demoCap">${esc(lines[0])}</div></div>
+        <div class="strip" id="demoStrip">${clips}</div>
+        <small>문장 하나가 자막 한 줄, 클립 하나가 돼요</small>
+      </div>
+    </section>
+
+    <h2 class="sec-h">이렇게 진행해요</h2>
+    <div class="steps">
+      <div class="step"><span class="n">STEP 1</span><h3>캐릭터 프롬프트</h3><p>누구인지, 무엇을 입고 어떤 그림체인지 고르면 기본 그림과 캐릭터 시트 프롬프트가 나와요.</p><a class="btn sm" href="#char">만들기</a></div>
+      <div class="step"><span class="n">STEP 2</span><h3>대본 프롬프트</h3><p>영상 종류, 주제, 보는 사람, 길이를 답하면 브루에 맞춘 대본 요청문이 나와요.</p><a class="btn sm" href="#script">만들기</a></div>
+      <div class="step"><span class="n">STEP 3</span><h3>이미지 프롬프트</h3><p>브루 ‘비디오 꾸미기’의 이미지 프롬프트 칸에 넣을 그림체·주인공·색감 설명을 만들어요.</p><a class="btn sm" href="#scene">만들기</a></div>
+      <div class="step vrew"><span class="n">STEP 4</span><h3>브루에서 영상 완성</h3><p>대본과 이미지 프롬프트를 넣고, AI 목소리와 배경음악을 골라 숏폼을 완성해요.</p><a class="btn sm" href="https://vrew.ai/ko/" target="_blank" rel="noopener">브루 열기 ↗</a></div>
+    </div>
+
+    <h2 class="sec-h">만든 프롬프트는 어디에 붙여 넣나요?</h2>
+    <div class="where">
+      <div><span>프롬프트</span><span>붙여 넣을 곳</span><span>받은 결과로 할 일</span></div>
+      <div><b>캐릭터 그림</b><span>ChatGPT, Gemini, Canva 등 이미지 생성 AI</span><span>그림을 저장해 두고, 장면 그림을 만들 때 함께 올려요</span></div>
+      <div><b>대본 요청</b><span>ChatGPT, Gemini, Claude 등 대화형 AI</span><span>받은 대본을 브루 ‘텍스트로 비디오 만들기’에 붙여 넣어요</span></div>
+      <div><b>이미지 프롬프트</b><span>브루 비디오 꾸미기 → AI 이미지 → 이미지 프롬프트 칸</span><span>기준 캐릭터 그림을 ‘참고 이미지’로 올리고 만들기를 눌러요</span></div>
+    </div>
+  </div>`;
+  if (!reduce) {
+    let i = 0;
+    clearInterval(renderHome.timer);
+    renderHome.timer = setInterval(() => {
+      const cap = $('#demoCap'), strip = $('#demoStrip');
+      if (!cap || !strip) { clearInterval(renderHome.timer); return; }
+      i = (i + 1) % lines.length;
+      cap.textContent = lines[i];
+      [...strip.children].forEach((c, k) => c.classList.toggle('on', k === i));
+    }, 2200);
+  }
+}
+
+/* ---------- 도구 페이지 ---------- */
+function renderTool(p) {
+  const P = PAGES[p];
+  const nx = P.next;
+  $('#app').innerHTML = `
+  <div class="wrap">
+    <div class="ph-head">
+      <div><p class="eyebrow">STEP ${P.step} / 3</p><h1>${P.title}</h1><p>${P.desc}</p></div>
+      <div class="ph-tools">
+        <button class="btn sm" data-act="example">예시로 채우기</button>
+        <button class="btn sm" data-act="reset" id="resetBtn">처음부터</button>
+      </div>
+    </div>
+    <div class="tool">
+      <section class="chat" id="chat" aria-label="질문"></section>
+      <aside class="out" id="out" aria-label="완성된 프롬프트"></aside>
+    </div>
+    <div class="next"><a class="btn primary" href="${nx.href}"${nx.ext ? ' target="_blank" rel="noopener"' : ''}>${nx.label}</a></div>
+  </div>`;
+  updateChat(p);
+  updateOut(p);
+}
+
+function updateChat(p) {
+  const P = PAGES[p], st = S(p), Q = P.Q();
+  if (st.cur > Q.length) st.cur = firstOpen(p, 0);
+  let h = `<div class="msg bot"><span class="ava" aria-hidden="true"></span><div class="bubble">${P.intro}</div></div>`;
+  Q.forEach((q, i) => {
+    const ans = st.a[q.id];
+    const bot = `<div class="msg bot"><span class="ava" aria-hidden="true"></span><div class="bubble"><span class="qn">${i + 1} / ${Q.length}</span>${esc(q.ask)}${q.hint ? `<span class="hint">${esc(q.hint)}</span>` : ''}</div></div>`;
+    if (i === st.cur) h += bot + area(p, q);
+    else if (ans !== undefined) h += bot + `<div class="msg user"><button class="fix" data-act="edit" data-i="${i}">고치기</button><div class="bubble${ans.skip ? ' skip' : ''}">${esc(labelOf(q, ans))}</div></div>`;
+  });
+  if (st.cur >= Q.length) {
+    h += `<div class="msg bot done" id="area"><span class="ava" aria-hidden="true"></span><div class="bubble">다 됐어요! 프롬프트를 복사해서 AI에 붙여 넣으세요. 답을 바꾸고 싶으면 ‘고치기’를 누르면 돼요.</div></div>`;
+  }
+  $('#chat').innerHTML = h;
+}
+
+function area(p, q) {
+  const st = S(p), cur = st.a[q.id];
+  let h = '<div class="area" id="area">';
+  if (q.type === 'single' || q.type === 'multi') {
+    const opts = getOpts(q);
+    if (q.type === 'multi' && (!pending || pending.q !== q.id)) pending = { q: q.id, list: Array.isArray(cur) ? cur.slice() : [] };
+    const sel = q.type === 'multi' ? pending.list : [];
+    h += '<div class="chips">' + opts.map((op, i) => {
+      const on = q.type === 'multi' ? sel.some(s => s.ko === op.ko && s.en === op.en)
+        : !!(cur && !Array.isArray(cur) && !cur.skip && cur.ko === op.ko && (cur.label || cur.ko) === (op.label || op.ko));
+      return `<button class="chip${on ? ' on' : ''}" data-act="${q.type === 'multi' ? 'toggle' : 'pick'}" data-i="${i}" aria-pressed="${on}">${op.sw ? `<i class="sw" style="background:${op.sw}"></i>` : ''}${esc(op.label || op.ko)}</button>`;
+    }).join('');
+    if (q.type === 'multi') sel.forEach((s, i) => { if (s.custom) h += `<button class="chip on" data-act="unadd" data-i="${i}" aria-pressed="true" title="눌러서 빼기">${esc(s.ko)}</button>`; });
+    h += '</div>';
+  }
+  if (q.custom || q.type === 'text') {
+    const val = (q.type === 'text' && cur && !cur.skip) ? cur.ko : '';
+    h += `<div class="row"><input class="txt" id="cin" type="text" autocomplete="off" placeholder="${esc(q.placeholder || q.custom)}" value="${esc(val)}"><button class="btn sm" data-act="custom">${q.type === 'multi' ? '더하기' : '입력'}</button></div>`;
+  }
+  if (q.type === 'longtext') {
+    const val = cur && !cur.skip ? cur.ko : '';
+    h += `<textarea class="txt" id="cin" placeholder="${esc(q.placeholder)}">${esc(val)}</textarea>`;
+  }
+  const btns = [];
+  if (q.type === 'longtext') btns.push(`<button class="btn sm" data-act="sample">예시 대본 넣기</button>`, '<span class="spacer"></span>', `<button class="btn sm primary" data-act="custom">다음</button>`);
+  if (q.type === 'multi') btns.push('<span class="spacer"></span>', `<button class="btn sm primary" data-act="multi">${pending.list.length ? `${pending.list.length}개 고르고 다음` : '다음'}</button>`);
+  if (q.optional) btns.splice(q.type === 'multi' ? 1 : 0, 0, `<button class="btn sm" data-act="skip">건너뛰기</button>`);
+  if (btns.length) h += `<div class="row">${btns.join('')}</div>`;
+  return h + '</div>';
+}
+
+function updateOut(p) {
+  const P = PAGES[p], st = S(p);
+  const lang = P.langs.includes(st.lang) ? st.lang : P.langs[0];
+  const tab = P.outs.some(x => x.id === st.tab) ? st.tab : P.outs[0].id;
+  const out = P.outs.find(x => x.id === tab);
+  const res = out.build(st.a, lang);
+  const items = Array.isArray(res) ? res : [{ title: '', text: res }];
+  OUTCACHE = items.map(x => x.text);
+  const missing = (OUTCACHE.join('').match(/⟦/g) || []).length;
+  const mark = t => esc(t).replace(/⟦(.+?)⟧/g, '<mark class="ph">$1</mark>');
+  let h = `<div class="out-h"><h2>완성된 프롬프트</h2>${missing ? `<span class="pill">빈칸 ${missing}개</span>` : '<span class="pill ok">완성</span>'}</div>`;
+  h += '<div class="bar">';
+  h += P.outs.length > 1 ? `<div class="seg" role="tablist">${P.outs.map(x => `<button role="tab" aria-selected="${x.id === tab}" class="${x.id === tab ? 'on' : ''}" data-act="tab" data-v="${x.id}">${x.label}</button>`).join('')}</div>` : '<span></span>';
+  if (P.langs.length > 1) h += `<div class="seg" aria-label="언어">${P.langs.map(l => `<button class="${l === lang ? 'on' : ''}" aria-pressed="${l === lang}" data-act="lang" data-v="${l}">${l === 'ko' ? '한국어' : 'English'}</button>`).join('')}</div>`;
+  h += '</div>';
+  if (Array.isArray(res)) {
+    h += `<div class="row"><span class="spacer"></span><button class="btn sm primary" data-act="copyall">장면 ${items.length}개 모두 복사</button></div><div class="scenes">`;
+    h += items.map((x, i) => `<div class="scene"><div class="scene-h"><span>${esc(x.title)}</span><button class="btn sm" data-act="copy" data-i="${i}">복사</button></div><pre class="prompt" id="pr${i}">${mark(x.text)}</pre></div>`).join('');
+    h += '</div>';
+  } else {
+    h += `<pre class="prompt" id="pr0">${mark(res)}</pre><div class="row"><span class="spacer"></span><button class="btn primary" data-act="copy" data-i="0">프롬프트 복사</button></div>`;
+  }
+  if (out.count && !Array.isArray(res)) h += `<p class="note">글자 수 <b>${res.replace(/[⟦⟧]/g, '').length}자</b> · 칸에 다 안 들어가면 ‘피할 것’ 줄을 먼저 빼 보세요.</p>`;
+  h += `<p class="note">${out.where || P.where}</p>`;
+  $('#out').innerHTML = h;
+}
+
+/* ---------- 동작 ---------- */
+function answer(p, val) {
+  const st = S(p), q = PAGES[p].Q()[st.cur];
+  if (!q) return;
+  st.a[q.id] = val;
+  st.cur = firstOpen(p, st.cur + 1);
+  pending = null;
+  save();
+  updateChat(p); updateOut(p); focusArea();
+}
+function focusArea() {
+  const el = $('#area');
+  if (!el) return;
+  el.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+  const inp = $('#cin', el);
+  if (inp && (inp.tagName === 'TEXTAREA' || !$('.chips', el))) inp.focus({ preventScroll: true });
+}
+let toastT;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function copy(text, el) {
+  const clean = text.replace(/⟦(.+?)⟧/g, '[$1]');
+  const left = (text.match(/⟦/g) || []).length;
+  const ok = () => toast(left ? `복사했어요. 아직 빈칸이 ${left}개 있어요.` : '복사했어요. AI 입력창에 붙여 넣으세요.');
+  const fail = () => {
+    if (el) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    toast('자동 복사가 막혀 있어요. 선택된 글자를 Ctrl+C로 복사하세요.');
+  };
+  try { navigator.clipboard.writeText(clean).then(ok, fail); } catch (e) { fail(); }
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || !PAGES[route]) return;
+  const p = route, st = S(p), Q = PAGES[p].Q(), q = Q[st.cur], act = b.dataset.act;
+  if (act !== 'reset' && resetArm) { resetArm = false; const rb = $('#resetBtn'); if (rb) rb.textContent = '처음부터'; }
+  if (act === 'pick') answer(p, getOpts(q)[+b.dataset.i]);
+  else if (act === 'toggle') {
+    const op = getOpts(q)[+b.dataset.i];
+    const k = pending.list.findIndex(s => s.ko === op.ko && s.en === op.en);
+    if (k >= 0) pending.list.splice(k, 1); else pending.list.push(op);
+    updateChat(p);
+  }
+  else if (act === 'unadd') { pending.list.splice(+b.dataset.i, 1); updateChat(p); }
+  else if (act === 'multi') answer(p, pending.list.slice());
+  else if (act === 'custom') submitCustom(p);
+  else if (act === 'skip') answer(p, { skip: true });
+  else if (act === 'sample') { const t = $('#cin'); if (t) { t.value = SAMPLE_SCRIPT; t.focus(); } }
+  else if (act === 'edit') { st.cur = +b.dataset.i; pending = null; save(); updateChat(p); focusArea(); }
+  else if (act === 'tab') { st.tab = b.dataset.v; save(); updateOut(p); }
+  else if (act === 'lang') { st.lang = b.dataset.v; save(); updateOut(p); }
+  else if (act === 'copy') copy(OUTCACHE[+b.dataset.i] || '', $('#pr' + b.dataset.i));
+  else if (act === 'copyall') copy(OUTCACHE.map((t, i) => `[${i + 1}]\n${t}`).join('\n\n'), null);
+  else if (act === 'example') {
+    st.a = PAGES[p].example(); st.cur = Q.length; pending = null; save();
+    updateChat(p); updateOut(p); toast('예시 답을 채웠어요. ‘고치기’로 하나씩 바꿔 보세요.');
+  }
+  else if (act === 'reset') {
+    if (!resetArm) { resetArm = true; b.textContent = '한 번 더 누르면 지워져요'; return; }
+    resetArm = false; DATA[p] = { a: {}, cur: 0, lang: st.lang, tab: st.tab }; pending = null; save();
+    b.textContent = '처음부터'; updateChat(p); updateOut(p); toast('이 단계의 답을 모두 지웠어요.');
+  }
+});
+function submitCustom(p) {
+  const st = S(p), q = PAGES[p].Q()[st.cur], inp = $('#cin');
+  if (!q || !inp) return;
+  const v = inp.value.trim();
+  if (!v) { inp.focus(); toast(q.type === 'longtext' ? '대본을 먼저 붙여 넣어 주세요.' : '내용을 입력해 주세요.'); return; }
+  if (q.type === 'multi') {
+    pending.list.push({ ko: v, en: v, label: v, custom: true });
+    updateChat(p); const n = $('#cin'); if (n) n.focus();
+    return;
+  }
+  answer(p, { ko: v, en: v, label: v });
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'cin' && e.target.tagName === 'INPUT' && !e.isComposing) { e.preventDefault(); submitCustom(route); }
+});
+
+/* ---------- 라우팅 ---------- */
+function go() {
+  const h = location.hash.slice(1);
+  const r = PAGES[h] ? h : 'home';
+  if (r === route) return;
+  route = r; pending = null; resetArm = false;
+  document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', a.dataset.r === r));
+  if (r === 'home') { renderHome(); document.title = '숏폼 프롬프트 공방'; }
+  else { renderTool(r); document.title = PAGES[r].title + ' · 숏폼 프롬프트 공방'; }
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', go);
+go();
+})();
+</script>
+</body>
+</html>
