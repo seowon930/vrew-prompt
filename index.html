@@ -516,7 +516,7 @@ const PAGES = {
     intro: '질문에 하나씩 답하면 프롬프트 칸이 바로바로 채워져요. 고르기 어려우면 ‘예시로 채우기’를 눌러 보세요.',
     Q: () => CHAR_Q, langs: ['ko'],
     outs: [{ id: 'base', label: '기준 캐릭터', build: buildCharBase }, { id: 'sheet', label: '캐릭터 시트', build: buildCharSheet }],
-    where: '<b>붙여 넣을 곳</b> ChatGPT, Gemini, <a href="https://www.canva.com/ko_kr/" target="_blank" rel="noopener">Canva</a> 같은 이미지 생성 AI나 브루의 AI 이미지 기능. 기준 캐릭터를 먼저 만들고, 같은 대화창에서 캐릭터 시트를 이어서 요청하세요.',
+    where: '<b>붙여 넣을 곳</b> <a href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a>, <a href="https://gemini.google.com/" target="_blank" rel="noopener">Gemini</a>, <a href="https://www.canva.com/ko_kr/" target="_blank" rel="noopener">Canva</a> 같은 이미지 생성 AI나 브루의 AI 이미지 기능. 기준 캐릭터를 먼저 만들고, 같은 대화창에서 캐릭터 시트를 이어서 요청하세요.',
     next: { href: '#script', label: '다음: 대본 프롬프트 만들기 →' },
     example: () => {
       const op = (id, i) => CHAR_Q.find(q => q.id === id).options[i];
@@ -528,7 +528,7 @@ const PAGES = {
     intro: '대본은 AI가 써 주고, 여기서는 AI에게 보낼 요청문을 만들어요. 화면 비율부터 정해 볼까요?',
     Q: () => SCRIPT_Q, langs: ['ko'],
     outs: [{ id: 'script', label: '대본 요청', build: a => buildScript(a) }],
-    where: '<b>붙여 넣을 곳</b> ChatGPT, Gemini, Claude 같은 대화형 AI. 받은 ① 대본을 브루의 ‘텍스트로 비디오 만들기’ 2단계 대본 작성 칸에 붙여 넣으세요.',
+    where: '<b>붙여 넣을 곳</b> <a href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a>, <a href="https://gemini.google.com/" target="_blank" rel="noopener">Gemini</a>, <a href="https://claude.ai/" target="_blank" rel="noopener">Claude</a> 같은 대화형 AI. 받은 ① 대본을 브루의 ‘텍스트로 비디오 만들기’ 2단계 대본 작성 칸에 붙여 넣으세요.',
     next: { href: '#scene', label: '다음: 이미지 프롬프트 만들기 →' },
     example: () => ({ ratio: SCRIPT_Q[0].options[0], kind: SCRIPT_Q[1].options[1], topic: o('물의 순환'), aud: SCRIPT_Q[3].options[1], len: SCRIPT_Q[4].options[1], voice: SCRIPT_Q[5].options()[0], tone: SCRIPT_Q[6].options[0], must: o('증발, 응결, 강수'), end: SCRIPT_Q[8].options[0] })
   },
