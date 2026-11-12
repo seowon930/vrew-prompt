@@ -150,6 +150,8 @@ h1, h2, h3 { text-wrap: balance; margin: 0; }
 .chip:hover { border-color: var(--accent); }
 .chip.on { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
 .chip.on::before { content: "✓ "; color: var(--accent); }
+.picker { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+.picker input { width: 40px; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
 .sw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line); margin-right: 6px; vertical-align: -1px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .txt { flex: 1 1 200px; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: inherit; }
@@ -280,7 +282,9 @@ const STYLE_BY = Object.fromEntries(STYLE_DEFS.map(d => [d.name, d]));
 const STYLES = STYLE_DEFS.map(d => Object.assign(o(d.desc, d.en, d.name), { key: d.name }));
 const RATIO_TXT = { '1:1': '정사각형 1:1', '9:16': '세로 9:16', '16:9': '가로 16:9' };
 const COLORS = [
-  ['노랑', '#FFD952'], ['분홍', '#FF8FB1'], ['하늘', '#7CC8FF'], ['연두', '#9BE07A'], ['보라', '#B79CFF'], ['주황', '#FF9F5A'], ['빨강', '#F25C54'], ['남색', '#3B4A9C']
+  ['노랑', '#FFD952'], ['주황', '#FF9F5A'], ['빨강', '#F25C54'], ['분홍', '#FF8FB1'], ['연분홍', '#FFC4D6'], ['보라', '#B79CFF'],
+  ['라벤더', '#D9C8FF'], ['남색', '#3B4A9C'], ['파랑', '#4A7BF7'], ['하늘', '#7CC8FF'], ['민트', '#7FE0C9'], ['초록', '#4CAF6A'],
+  ['연두', '#9BE07A'], ['갈색', '#A0703C'], ['베이지', '#E8D3B0'], ['회색', '#9AA3A8'], ['검정', '#2B2B2B'], ['흰색', '#FFFFFF']
 ].map(([n, h]) => Object.assign(o(`${h} (${n})`, h, n), { sw: h }));
 
 function styleOf(a) {
@@ -316,7 +320,7 @@ const CHAR_Q = [
   { id: 'bg', ask: '배경은 어디인가요?', hint: '첫 그림은 단색 배경을 추천해요. 캐릭터가 또렷하게 나와서 다음 그림에 쓰기 좋아요.', type: 'single', custom: '직접 쓰기 예: 노을 진 바닷가',
     options: [o('단색 배경', 'a plain light solid-color background', '단색 배경 (캐릭터만)'), o('밝은 교실', 'a bright classroom'), o('아늑한 도서관', 'a cozy library'), o('학교 운동장', 'a school playground'), o('과학실', 'a science lab'), o('햇살 비치는 숲속', 'a sunny forest'), o('별이 가득한 우주', 'outer space full of stars')] },
   { id: 'style', ask: '어떤 그림체로 그릴까요?', hint: '장면 그림도 같은 그림체로 맞추면 영상이 자연스러워요.', type: 'single', custom: '직접 쓰기 예: 크레파스 그림', options: STYLES },
-  { id: 'color', ask: '포인트 컬러를 골라 주세요.', hint: '옷·리본·소품 같은 곳에 들어가는 색이에요. 영상 전체 색감을 맞춰 줘요.', type: 'single', optional: true, custom: '직접 쓰기 예: #3366FF 또는 민트색', options: COLORS },
+  { id: 'color', ask: '포인트 컬러를 골라 주세요.', hint: '옷·리본·소품 같은 곳에 들어가는 색이에요. 영상 전체 색감을 맞춰 줘요.', type: 'single', optional: true, picker: true, options: COLORS },
   { id: 'ratio', ask: '그림 비율을 골라 주세요.', hint: '캐릭터 기본 그림은 1:1을 많이 써요.', type: 'single',
     options: [o('1:1', '1:1', '1:1 정사각형'), o('9:16', '9:16', '9:16 세로 · 숏폼'), o('16:9', '16:9', '16:9 가로')] },
 ];
@@ -577,6 +581,7 @@ const SHORT = {
 
 /* ---------- 상태 도우미 ---------- */
 let route = null, pending = null, resetArm = false, OUTCACHE = [];
+const swatch = x => (x && /^#[0-9A-Fa-f]{6}$/.test(x.sw || '')) ? `<i class="sw" style="background:${x.sw}"></i>` : '';
 const getOpts = q => typeof q.options === 'function' ? q.options() : (q.options || []);
 function firstOpen(p, from) {
   const Q = PAGES[p].Q(), a = S(p).a;
@@ -685,7 +690,7 @@ function updateChat(p) {
     const ans = st.a[q.id];
     const bot = `<div class="msg bot"><span class="ava" aria-hidden="true"></span><div class="bubble"><span class="qn">${i + 1} / ${Q.length}</span>${esc(q.ask)}${q.hint ? `<span class="hint">${esc(q.hint)}</span>` : ''}</div></div>`;
     if (i === st.cur) h += bot + area(p, q);
-    else if (ans !== undefined) h += bot + `<div class="msg user"><button class="fix" data-act="edit" data-i="${i}">바꾸기</button><button class="bubble ubtn${ans.skip ? ' skip' : ''}" data-act="edit" data-i="${i}" title="눌러서 이 답만 바꾸기">${esc(labelOf(q, ans))}</button></div>`;
+    else if (ans !== undefined) h += bot + `<div class="msg user"><button class="fix" data-act="edit" data-i="${i}">바꾸기</button><button class="bubble ubtn${ans.skip ? ' skip' : ''}" data-act="edit" data-i="${i}" title="눌러서 이 답만 바꾸기">${swatch(ans)}${esc(labelOf(q, ans))}</button></div>`;
   });
   if (st.cur >= Q.length) {
     h += `<div class="msg bot done" id="area"><span class="ava" aria-hidden="true"></span><div class="bubble">다 됐어요! 프롬프트를 복사해서 AI에 붙여 넣으세요. 바꾸고 싶은 답을 누르면 그 부분만 다시 고를 수 있어요.</div></div>`;
@@ -707,6 +712,10 @@ function area(p, q) {
     }).join('');
     if (q.type === 'multi') sel.forEach((s, i) => { if (s.custom) h += `<button class="chip on" data-act="unadd" data-i="${i}" aria-pressed="true" title="눌러서 빼기">${esc(s.ko)}</button>`; });
     h += '</div>';
+  }
+  if (q.picker) {
+    const hex = cur && cur.sw ? cur.sw : '#FFD952';
+    h += `<div class="row"><label class="picker" for="cpick"><input type="color" id="cpick" value="${esc(hex.toLowerCase())}"><span>팔레트에서 다른 색 고르기</span></label><button class="btn sm" data-act="pickcolor">이 색으로 정하기</button></div>`;
   }
   if (q.custom || q.type === 'text') {
     const val = (q.type === 'text' && cur && !cur.skip) ? cur.ko : '';
@@ -739,7 +748,7 @@ function updateOut(p) {
   const Q = P.Q(), sh = SHORT[p] || {};
   h += '<div class="ans-h">내 답 · 누르면 그 부분만 바꿀 수 있어요</div><div class="answers">' + Q.map((q, i) => {
     const x = st.a[q.id];
-    return `<button class="ans${i === st.cur ? ' on' : ''}${x === undefined ? ' empty' : ''}" data-act="edit" data-i="${i}" title="${esc(q.ask)}"><span>${esc(sh[q.id] || q.ask)}</span>${esc(x === undefined ? '아직' : labelOf(q, x).split('\n')[0])}</button>`;
+    return `<button class="ans${i === st.cur ? ' on' : ''}${x === undefined ? ' empty' : ''}" data-act="edit" data-i="${i}" title="${esc(q.ask)}"><span>${esc(sh[q.id] || q.ask)}</span>${swatch(x)}${esc(x === undefined ? '아직' : labelOf(q, x).split('\n')[0])}</button>`;
   }).join('') + '</div>';
   h += '<div class="bar">';
   h += P.outs.length > 1 ? `<div class="seg" role="tablist">${P.outs.map(x => `<button role="tab" aria-selected="${x.id === tab}" class="${x.id === tab ? 'on' : ''}" data-act="tab" data-v="${x.id}">${x.label}</button>`).join('')}</div>` : '<span></span>';
@@ -808,6 +817,7 @@ document.addEventListener('click', e => {
   else if (act === 'skip') answer(p, { skip: true });
   else if (act === 'sample') { const t = $('#cin'); if (t) { t.value = SAMPLE_SCRIPT; t.focus(); } }
   else if (act === 'edit') { st.cur = +b.dataset.i; pending = null; save(); updateChat(p); updateOut(p); focusArea(true); }
+  else if (act === 'pickcolor') { const c = $('#cpick'); if (c) { const v = c.value.toUpperCase(); answer(p, { ko: v, en: v, label: v, sw: v }); } }
   else if (act === 'keep') { st.cur = firstOpen(p, 0); pending = null; save(); updateChat(p); updateOut(p); }
   else if (act === 'tab') { st.tab = b.dataset.v; save(); updateOut(p); }
   else if (act === 'lang') { st.lang = b.dataset.v; save(); updateOut(p); }
